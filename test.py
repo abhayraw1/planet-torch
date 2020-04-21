@@ -39,7 +39,7 @@ def main():
         ready_to_train = memory.size > 5
         rollout(memory, env)
         if ready_to_train:
-            (x, u, _, _), lens = memory.sample(16)
+            (x, u, _, _), lens = memory.sample(64)
             kl_loss, rec_loss = detssm.train_on_batch(u, x, lens)
             print(f'Loss @ Episode [{i+1}]: KL [{kl_loss}] REC [{rec_loss}]')
             if (i + 1) % 25 == 0:

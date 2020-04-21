@@ -6,6 +6,7 @@ from utils import *
 from collections import deque
 from numpy.random import choice
 from torch import float32 as F32
+from torch.nn.utils.rnn import pad_sequence
 
 class Episode:
     def __init__(self, device, bit_depth):
@@ -52,6 +53,7 @@ class Memory:
         self._shapes = None
         self.tracelen = tracelen
         self.data = deque(maxlen=size)
+        self._empty_batch = None
 
     @property
     def size(self):
@@ -62,11 +64,14 @@ class Memory:
         return self._shapes
 
     def get_empty_batch(self, batch_size):
-        data = []
-        for i, s in enumerate(self.shapes):
-            h = self.tracelen + 1 if not i else self.tracelen
-            data.append(torch.zeros(batch_size, h, *s).to(self.device))
-        return data
+        if self._empty_batch is None or\
+            self._empty_batch[0].size(0) != batch_size:
+            data = []
+            for i, s in enumerate(self.shapes):
+                h = self.tracelen + 1 if not i else self.tracelen
+                data.append(torch.zeros(batch_size, h, *s).to(self.device))
+            self._empty_batch = data
+        return [x.clone() for x in self._empty_batch]
     
     def append(self, episode: Episode):
         self.data.append(episode)
@@ -77,11 +82,16 @@ class Memory:
         episode_idx = choice(self.size, batch_size)
         init_st_idx = [choice(self.data[i].size) for i in episode_idx]
         data = self.get_empty_batch(batch_size)
-        xx, uu, rr, dd = [], [], [], []
-        for n, (i, s) in enumerate(zip(episode_idx, init_st_idx)):
-            x, u, r, d = self.data[i].prepare(s, s + self.tracelen)
-            xx.append(x)
-            uu.append(u)
-            rr.append(r)
-            dd.append(d)
-        return [torch.nn.utils.rnn.pad_sequence(i) for i in [xx, uu, rr, dd]]
+        # xx, uu, rr, dd = [], [], [], []
+        seq_lengths = []
+        try:
+            for n, (i, s) in enumerate(zip(episode_idx, init_st_idx)):
+                x, u, r, d = self.data[i].prepare(s, s + self.tracelen)
+                data[0][n, :x.size(0)] = x
+                data[1][n, :u.size(0)] = u
+                data[2][n, :r.size(0)] = r
+                data[3][n, :d.size(0)] = d
+                seq_lengths.append(len(d))
+            return data, seq_lengths
+        except:
+            pdb.set_trace()

@@ -53,6 +53,13 @@ def save_frames(target, pred_prior, pred_posterior, name, n_rows=5):
     save_image(make_grid(image + 0.5, nrow=n_rows), f'{name}.png')
 
 
+def get_mask(shape, lengths):
+    mask = torch.zeros_like(shape)
+    for i in range(len(lengths)):
+        mask[i, :lengths[i]] = 1.
+    return mask
+
+
 def apply_model(model, inputs, ignore_dim=None):
     pass
 

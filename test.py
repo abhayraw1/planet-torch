@@ -36,7 +36,7 @@ def main():
     memory = Memory(100, device, 50)
 
     for i in range(2000):
-        ready_to_train = memory.size > 5
+        ready_to_train = memory.size > 50
         rollout(memory, env)
         if ready_to_train:
             (x, u, _, _), lens = memory.sample(64)

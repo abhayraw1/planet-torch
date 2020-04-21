@@ -78,7 +78,7 @@ class DeterministicStateSpaceModel(nn.Module):
         rloss = rloss.sum((2, 3, 4)).mean()
         kloss = kl.kl_divergence(posterior_dist, prior_dist)*kmask
         kloss = kloss.sum((1, 2))
-        kloss = torch.max(kloss - 3, torch.tensor(0.).to(kloss.device)).mean()
+        kloss = torch.max(kloss - 2., torch.tensor(0.).to(kloss.device)).mean()
 
         self.optimizer.zero_grad()
         (rloss + kloss).backward()

@@ -53,11 +53,24 @@ def save_frames(target, pred_prior, pred_posterior, name, n_rows=5):
     save_image(make_grid(image + 0.5, nrow=n_rows), f'{name}.png')
 
 
-def get_mask(shape, lengths):
-    mask = torch.zeros_like(shape)
+def get_mask(tensor, lengths):
+    """
+    Generates the masks for batches of sequences.
+    Time should be the first axis.
+    input:
+        tensor: the tensor for which to generate the mask [N x T x ...]
+        lengths: lengths of the seq. [N] 
+    """
+    mask = torch.zeros_like(tensor)
     for i in range(len(lengths)):
         mask[i, :lengths[i]] = 1.
     return mask
+
+
+# def 
+
+
+
 
 
 def apply_model(model, inputs, ignore_dim=None):

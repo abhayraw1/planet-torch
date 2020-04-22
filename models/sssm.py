@@ -11,7 +11,7 @@ from torch.distributions import Normal, kl
 from utils import *
 from models.models import *
 
-class DeterministicStateSpaceModel(nn.Module):
+class StochasticStateSpaceModel(nn.Module):
     def __init__(self, action_size, state_size, latent_size, encoding_size):
         super().__init__()
         prior_in_size = state_size + action_size

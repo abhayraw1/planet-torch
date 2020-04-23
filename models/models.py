@@ -12,7 +12,7 @@ def to_time_independent_batches(x):
 
 
 class EncoderModel(nn.Module):
-    def __init__(self, embedding_size, activation_function='relu'):
+    def __init__(self, embedding_size, activation_function='elu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.conv1 = nn.Conv2d(3, 32, 4, stride=2)
@@ -35,7 +35,7 @@ class EncoderModel(nn.Module):
 
 
 class DecoderModel(nn.Module):
-    def __init__(self, state_size, latent_size, activation_function='relu'):
+    def __init__(self, state_size, latent_size, activation_function='elu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.fc1 = nn.Linear(state_size + latent_size, 1024)
@@ -58,7 +58,7 @@ class DecoderModel(nn.Module):
 
 
 class StochasticModel(nn.Module):
-    def __init__(self, input_size, output_size, activation_function='relu'):
+    def __init__(self, input_size, output_size, activation_function='elu'):
         super().__init__()
         hidden_size = 256
         self.act_fn = getattr(F, activation_function)
@@ -74,7 +74,7 @@ class StochasticModel(nn.Module):
 
 
 class DeterministicModel(nn.Module):
-    def __init__(self, input_size, output_size, activation_function='relu'):
+    def __init__(self, input_size, output_size, activation_function='elu'):
         super().__init__()
         hidden_size = 128
         self.act_fn = getattr(F, activation_function)
@@ -89,7 +89,7 @@ class DeterministicModel(nn.Module):
 
 
 class PosteriorModel(nn.Module):
-    def __init__(self, state_size, embed_size, activation_function='relu'):
+    def __init__(self, state_size, embed_size, activation_function='elu'):
         super().__init__()
         hidden_size = 128
         self.act_fn = getattr(F, activation_function)
@@ -105,25 +105,25 @@ class PosteriorModel(nn.Module):
 
 
 class TransitionModel(nn.Module):
-    def __init__(self, action_size, state_size, activation_function='relu'):
+    def __init__(self, action_size, state_size, activation_function='elu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.rnn = nn.GRUCell(action_size, state_size)
         self.fc1 = nn.Linear(state_size, state_size)
         self.fc2 = nn.Linear(state_size, state_size)
 
-    def forward(self, actions, state, unroll_dim=0):
+    def forward(self, actions, state, unroll_dim=1):
         states = []
         for action in torch.unbind(actions, dim=unroll_dim):
             state = self.act_fn(self.rnn(action, state))
-            state = self.act_fn(self.fc2(state))
             state = self.act_fn(self.fc1(state))
+            state = self.act_fn(self.fc2(state))
             states.append(state)
         return torch.stack(states).transpose(0, 1)
 
 
 class PriorTransitionModel(nn.Module):
-    def __init__(self, state_size, action_size, activation_function='relu'):
+    def __init__(self, state_size, action_size, activation_function='elu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.rnn = nn.GRUCell(action_size, state_size)
@@ -148,7 +148,7 @@ class PriorTransitionModel(nn.Module):
 
 
 class PosteriorTransitionModel(nn.Module):
-    def __init__(self, state_size, embedding_size, activation_function='relu'):
+    def __init__(self, state_size, embedding_size, activation_function='elu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.fc1 = nn.Linear(state_size + embedding_size, state_size)

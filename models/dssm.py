@@ -52,6 +52,7 @@ class DeterministicStateSpaceModel(nn.Module):
     def forward(self, actions, observations):
         N, T, C, H, W = observations.shape
         pr, ps, sn = None, None, None
+        # pdb.set_trace()
         if actions.shape[:2] != (N, T - 1):
             raise ValueError('Check time dim in actions and obs.')
         if observations.ndimension() == 4:
@@ -59,6 +60,7 @@ class DeterministicStateSpaceModel(nn.Module):
             pr, sn = self.prior(actions, observations)
         if observations.ndimension() == 5:
             pr, ps, sn = self.posterior(actions, observations, N, T, C, H, W)
+        return (*pr, *ps, sn)
         return {
             'prior': pr,
             'states': sn,

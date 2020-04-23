@@ -9,11 +9,12 @@ from models.dssm import *
 from models.models import *
 
 from torch.distributions import kl, Normal
+from torch.utils.tensorboard import SummaryWriter
 
 BIT_DEPTH = 5
-STATE_SIZE = 200
-LATENT_SIZE = 30
-EMBEDDING_SIZE = 1024
+STATE_SIZE = 7
+LATENT_SIZE = 3
+EMBEDDING_SIZE = 11
 
 
 def rollout(memory, env):
@@ -37,28 +38,22 @@ def train(memory, model, i):
 
 def main():
     # env = TorchImageEnvWrapper('Pendulum-v0', BIT_DEPTH)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    writer = SummaryWriter('results/test')
+    device = torch.device("cpu")
     detssm = DeterministicStateSpaceModel(
         1, STATE_SIZE, LATENT_SIZE, EMBEDDING_SIZE
     ).to(device)
-    # memory = Memory(100, device, 50)
-    
-    with open('memory.pth', 'rb') as f:
-        memory = pickle.load(f)
-        memory.device = device
-        for e in memory.data:
-            e.device = device
-
-    for i in tqdm.tqdm(range(1000)):
-        ready_to_train = memory.size > 50
-        # rollout(memory, env)
-        if ready_to_train:
-            train(memory, detssm, i)
-            if (i + 1) % 25 == 0:
-                (x, u, _, _), lens = memory.sample(1)
-                detssm.evaluate(u, x, i+1, 'results/eps_')
-            
-    # env.close()
+    obs = torch.rand(1, 5, 3, 64, 64)
+    actions = torch.rand(1, 4, 1)
+    e0 = [detssm.encoder(o) for o in torch.unbind(obs[:, :4], dim=1)]
+    c0 = torch.cat(e0, dim=-1)
+    s0 = detssm.init_state_model(c0)
+    sn = detssm.transition_model(actions, s0, unroll_dim=1)
+    pr = detssm.latent_prior(torch.cat([sn, actions], dim=-1))
+    writer.add_graph(detssm, [actions, obs])
+    # writer.add_graph(detssm.transition_model, [actions, s0])
+    # writer.add_graph(detssm.latent_prior, torch.cat([sn, actions], dim=-1))
     pdb.set_trace()
 
 

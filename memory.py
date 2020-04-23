@@ -76,6 +76,7 @@ class Memory:
     def append(self, episode: Episode):
         self.data.append(episode)
         if self.shapes is None:
+            # Store the shapes of objects
             self._shapes = [a.shape[1:] for a in episode.prepare(e=1)]
 
     def sample(self, batch_size):

@@ -17,8 +17,19 @@ STATE_SIZE = 200
 LATENT_SIZE = 30
 EMBEDDING_SIZE = 1024
 
+"""
+Training implementation as indicated in:
+    Learning Latent Dynamics for Planning from Pixels
+    arXiv:1811.04551
+    
+    (c.) The Latent Overshooting Method
+         using only single step predictions.
+"""
 
 def train(memory, model, optimizer, record_grads=True):
+    """
+    Trained using the Standard Variational Bound method indicated in Fig. 3a
+    """
     model.train()
     metrics = defaultdict(list)
     if record_grads:

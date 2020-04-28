@@ -94,5 +94,6 @@ class Memory:
                 data[3][n, :d.size(0)] = d
                 seq_lengths.append(len(d))
             return data, seq_lengths
-        except:
+        except Exception as e:
+            print(e)
             pdb.set_trace()

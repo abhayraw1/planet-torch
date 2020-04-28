@@ -63,14 +63,14 @@ class StochasticModel(nn.Module):
         hidden_size = 128
         self.act_fn = getattr(F, activation_function)
         self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        # self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.mean = nn.Linear(hidden_size, output_size)
         self.std = nn.Linear(hidden_size, output_size)
     
     def forward(self, embed):
         hidden = self.act_fn(self.fc1(embed))
-        hidden = self.act_fn(self.fc2(hidden))
         return (self.mean(hidden), F.softplus(self.std(hidden)))
+        # hidden = self.act_fn(self.fc2(hidden))
 
 
 class DeterministicModel(nn.Module):
@@ -79,13 +79,13 @@ class DeterministicModel(nn.Module):
         hidden_size = 128
         self.act_fn = getattr(F, activation_function)
         self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        # self.fc2 = nn.Linear(hidden_size, hidden_size)
         self.fc3 = nn.Linear(hidden_size, output_size)
     
     def forward(self, hidden):
         hidden = self.act_fn(self.fc1(hidden))
-        hidden = self.act_fn(self.fc2(hidden))
         return self.act_fn(self.fc3(hidden))
+        # hidden = self.act_fn(self.fc2(hidden))
 
 
 class PosteriorModel(nn.Module):

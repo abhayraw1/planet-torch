@@ -47,20 +47,20 @@ class DecoderModel(nn.Module):
 
     def forward(self, state, latent):
         # hidden = self.act_fn(self.fc1(state))
-        n, t, _ = state.shape
+        n, _ = state.shape
         hidden = self.act_fn(self.fc1(torch.cat([state, latent], dim=-1)))
-        hidden = hidden.view(n*t, 1024, 1, 1)
+        hidden = hidden.view(n, 1024, 1, 1)
         hidden = self.act_fn(self.conv1(hidden))
         hidden = self.act_fn(self.conv2(hidden))
         hidden = self.act_fn(self.conv3(hidden))
         observation = self.conv4(hidden)
-        return observation.view(n, t, *observation.shape[1:])
+        return observation.view(n, *observation.shape[1:])
 
 
 class StochasticModel(nn.Module):
     def __init__(self, input_size, output_size, activation_function='elu'):
         super().__init__()
-        hidden_size = 256
+        hidden_size = 128
         self.act_fn = getattr(F, activation_function)
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -118,7 +118,27 @@ class TransitionModel(nn.Module):
             state = self.act_fn(self.rnn(action, state))
             state = self.act_fn(self.fc1(state))
             state = self.act_fn(self.fc2(state))
-            states.append(state)
+            states.append(state.clone())
+        return torch.stack(states).transpose(0, 1)
+
+
+class TransitionModelv2(nn.Module):
+    def __init__(self,
+            input_size, latent_size, activation_function='elu'
+        ):
+        super().__init__()
+        self.act_fn = getattr(F, activation_function)
+        self.rnn = nn.GRUCell(action_size, latent_size)
+        self.fc1 = nn.Linear(latent_size, latent_size)
+        self.fc2 = nn.Linear(latent_size, latent_size)
+
+    def forward(self, state, prev_state, unroll_dim=1):
+        states = []
+        for action in torch.unbind(actions, dim=unroll_dim):
+            state = self.act_fn(self.rnn(action, state))
+            state = self.act_fn(self.fc1(state))
+            state = self.act_fn(self.fc2(state))
+            states.append(state.clone())
         return torch.stack(states).transpose(0, 1)
 
 

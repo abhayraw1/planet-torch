@@ -15,8 +15,9 @@ class StochasticStateSpaceModel(nn.Module):
     def __init__(self, action_size, state_size, latent_size, encoding_size):
         super().__init__()
         prior_in_size = state_size + action_size
-        posterior_in_size = 2*latent_size + encoding_size
-        self.transition_model = TransitionModel(action_size, state_size)
+        posterior_in_size = 2*latent_size + encoding_size + prior_in_size
+        self.transition_rnn = nn.GRUCell(action_size + latent_size, state_size)
+        self.transition_fcl = DeterministicModel(state_size, state_size)
         self.latent_prior = StochasticModel(prior_in_size, latent_size)
         self.latent_posterior = StochasticModel(posterior_in_size, latent_size)
         self.encoder = EncoderModel(encoding_size)
@@ -33,9 +34,20 @@ class StochasticStateSpaceModel(nn.Module):
         """
         e0 = [self.encoder(o) for o in torch.unbind(observation, dim=1)]
         s0 = self.init_state_model(torch.cat(e0, dim=-1))
-        sn = self.transition_model(actions, s0, unroll_dim=1)
-        pr = self.latent_prior(torch.cat([sn, actions], dim=-1))
-        return pr, sn
+        sn, p_mean, p_stds = [], [], []
+        for action in torch.unbind(actions, dim=1):
+            prior = self.latent_prior(torch.cat([s0, action], dim=-1))
+            p_mean.append(prior[0])
+            p_stds.append(prior[1])
+            lt = torch.cat([Normal(*prior).rsample(), action], dim=-1)
+            s0 = F.elu(self.transition_rnn(lt, s0))
+            s0 = F.elu(self.transition_fcl(s0))
+            sn.append(s0.clone())
+        sn = torch.stack(sn).transpose(0, 1)
+        p_mean = torch.stack(p_mean).transpose(0, 1)
+        p_stds = torch.stack(p_stds).transpose(0, 1)
+        return (p_mean, p_stds), sn
+        # pr = self.latent_prior(torch.cat([sn, actions], dim=-1))
 
     def posterior(self, actions, observations, N, T, C, H, W):
         """
@@ -46,13 +58,18 @@ class StochasticStateSpaceModel(nn.Module):
         """
         pr, sn = self.prior(actions[:, 3:], observations[:, :4])
         en = self.encoder(observations[:, 4:].reshape(N*(T-4), C, H, W))
-        ps = self.latent_posterior(torch.cat([*pr, en.view(N, T-4, -1)], -1))
+        pi = torch.cat([sn, actions[:, 3:]], dim=-1)
+        pi = torch.cat([*pr, en.view(N, T-4, -1), pi], dim=-1)
+        ps = self.latent_posterior(pi)
         return pr, ps, sn
+        # en = self.encoder(observations[:, 4:].reshape(N*(T-4), C, H, W))
+        # ps = self.latent_posterior(torch.cat([*pr, en.view(N, T-4, -1)], -1))
+        # return pr, ps, sn
 
     def forward(self, actions, observations):
         N, T, C, H, W = observations.shape
-        pr, ps, sn = None, None, None
-        pdb.set_trace()
+        ps = None
+        # pdb.set_trace()
         if actions.shape[:2] != (N, T - 1):
             raise ValueError('Check time dim in actions and obs.')
         if observations.ndimension() == 4:
@@ -100,3 +117,6 @@ class StochasticStateSpaceModel(nn.Module):
         # rloss = ((pred2 - observations[:, 1:])**2).sum((2, 3, 4)).mean()
         # kloss = kl.kl_divergence(prior_dist, posterior_dist).sum((1, 2)).mean()
         # return kloss.item(), rloss.item()
+
+    def save(self, path):
+        torch.save(self.state_dict(), path)

@@ -15,7 +15,7 @@ class DeterministicStateSpaceModel(nn.Module):
     def __init__(self, action_size, state_size, latent_size, encoding_size):
         super().__init__()
         prior_in_size = state_size + action_size
-        posterior_in_size = 2*latent_size + encoding_size
+        posterior_in_size = 2*latent_size + encoding_size + prior_in_size
         self.transition_model = TransitionModel(action_size, state_size)
         self.latent_prior = StochasticModel(prior_in_size, latent_size)
         self.latent_posterior = StochasticModel(posterior_in_size, latent_size)
@@ -46,7 +46,9 @@ class DeterministicStateSpaceModel(nn.Module):
         """
         pr, sn = self.prior(actions[:, 3:], observations[:, :4])
         en = self.encoder(observations[:, 4:].reshape(N*(T-4), C, H, W))
-        ps = self.latent_posterior(torch.cat([*pr, en.view(N, T-4, -1)], -1))
+        pi = torch.cat([sn, actions[:, 3:]], dim=-1)
+        pi = torch.cat([*pr, en.view(N, T-4, -1), pi], -1)
+        ps = self.latent_posterior(pi)
         return pr, ps, sn
 
     def forward(self, actions, observations):
@@ -60,7 +62,7 @@ class DeterministicStateSpaceModel(nn.Module):
             pr, sn = self.prior(actions, observations)
         if observations.ndimension() == 5:
             pr, ps, sn = self.posterior(actions, observations, N, T, C, H, W)
-        return (*pr, *ps, sn)
+        # return (*pr, *ps, sn)
         return {
             'prior': pr,
             'states': sn,

@@ -1,9 +1,16 @@
+import os
 import sys
 import pdb
 import cv2
 import gym
 import torch
+import pickle
+import plotly
 import numpy as np
+
+
+from plotly.graph_objs import Scatter
+from plotly.graph_objs.scatter import Line
 
 from torchvision.utils import make_grid, save_image
 
@@ -67,14 +74,62 @@ def get_mask(tensor, lengths):
     return mask
 
 
-# def 
-
-
-
-
+def load_memory(path, device):
+    """
+    Loads an experience replay buffer.
+    """
+    with open(path, 'rb') as f:
+        memory = pickle.load(f)
+        memory.device = device
+        for e in memory.data:
+            e.device = device
+    return memory
 
 def apply_model(model, inputs, ignore_dim=None):
     pass
+
+def plot_metrics(metrics, path, prefix):
+    for key, val in metrics.items():
+        lineplot(np.arange(len(val)), val, f'{prefix}{key}', path)
+
+def lineplot(xs, ys, title, path='', xaxis='episode'):
+    MAX_LINE = Line(color='rgb(0, 132, 180)', dash='dash')
+    MIN_LINE = Line(color='rgb(0, 132, 180)', dash='dash')
+    NO_LINE = Line(color='rgba(0, 0, 0, 0)')
+    MEAN_LINE = Line(color='rgb(0, 172, 237)')
+    std_colour = 'rgba(29, 202, 255, 0.2)'
+    if isinstance(ys, dict):
+        data = []
+        for key, val in ys.items():
+            xs = np.arange(len(val))
+            data.append(Scatter(x=xs, y=np.array(val), name=key))
+    elif np.asarray(ys, dtype=np.float32).ndim == 2:
+        ys = np.asarray(ys, dtype=np.float32)
+        ys_mean, ys_std = ys.mean(-1), ys.std(-1)
+        ys_upper, ys_lower = ys_mean + ys_std, ys_mean - ys_std
+        l_max = Scatter(x=xs, y=ys.max(-1), line=MAX_LINE, name='Max')
+        l_min = Scatter(x=xs, y=ys.min(-1), line=MIN_LINE, name='Min')
+        l_stu = Scatter(x=xs, y=ys_upper, line=NO_LINE, showlegend=False)
+        l_mean = Scatter(
+            x=xs, y=ys_mean, fill='tonexty', fillcolor=std_colour,
+            line=MEAN_LINE, name='Mean'
+        )
+        l_stl = Scatter(
+            x=xs, y=ys_lower, fill='tonexty', fillcolor=std_colour,
+            line=NO_LINE, name='-1 Std. Dev.', showlegend=False
+        )
+        data = [l_stu, l_mean, l_stl, l_min, l_max]
+    else:
+        data = [Scatter(x=xs, y=ys, line=MEAN_LINE)]
+    plotly.offline.plot({
+        'data': data,
+        'layout': dict(
+            title=title,
+            xaxis={'title': xaxis},
+            yaxis={'title': title}
+            )
+        }, filename=os.path.join(path, title + '.html'), auto_open=False
+    )
 
 
 

@@ -6,6 +6,7 @@ import gym
 import torch
 import pickle
 import plotly
+import pathlib
 import numpy as np
 
 
@@ -37,6 +38,7 @@ def preprocess_img(image, depth):
     """
     Preprocesses an observation inplace.
     From float32 Tensor [0, 255] to [-0.5, 0.5]
+    Also adds some noise to the observations !!
     """
     image.div_(2 ** (8 - depth)).floor_().div_(2 ** depth).sub_(0.5)
     image.add_(torch.rand_like(image).div_(2 ** depth))
@@ -50,6 +52,21 @@ def get_combined_params(*models):
     for model in models:
         params.extend(list(model.parameters()))
     return params
+
+
+def save_video(frames, path, name):
+    """
+    Saves a video containing frames.
+    """
+    frames = (frames*255).astype('uint8').transpose(0, 2, 3, 1)[..., ::-1]
+    _, H, W, _ = frames.shape
+    writer = cv2.VideoWriter(
+        str(pathlib.Path(path)/f'{name}.mp4'),
+        cv2.VideoWriter_fourcc(*'mp4v'), 25., (W, H), True
+    )
+    for frame in frames:
+        writer.write(frame)
+    writer.release()
 
 
 def save_frames(target, pred_prior, pred_posterior, name, n_rows=5):

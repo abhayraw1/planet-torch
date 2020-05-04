@@ -21,9 +21,9 @@ LATENT_SIZE = 30
 EMBEDDING_SIZE = 1024
 
 ################### POLICY PARAMETERS ###################
-NUM_OPTIM_ITERS = 20
-PLANNING_HORIZON = 12
-TOP_OPTIM_CANDIDATES = 10
+NUM_OPTIM_ITERS = 10
+PLANNING_HORIZON = 8
+TOP_OPTIM_CANDIDATES = 20
 NUM_OPTIM_CANDIDATES = 200
 
 
@@ -44,7 +44,7 @@ def train(memory, model, optimizer, record_grads=False):
   metrics = defaultdict(list)
   if record_grads:
     metrics['grads'] = defaultdict(list)
-  for _ in trange(10, desc='# Epoch: ', leave=False):
+  for _ in trange(50, desc='# Epoch: ', leave=False):
     (x, u, r, _), lens = memory.sample(32)
     n, t = x.shape[:2]
 
@@ -83,7 +83,11 @@ def rollout(memory, env, policy):
   episode = Episode(memory.device, BIT_DEPTH)
   x = env.reset()
   eps_reward = 0
-  for _ in trange(env.env._max_episode_steps, leave=False):
+  for _ in trange(
+      env.env._max_episode_steps,
+      desc='Episode Rollout',
+      leave=False
+    ):
     u = policy(x.to(memory.device))
     nx, r, d, _ = env.step(u)
     episode.append(x, u, r, d)
@@ -91,17 +95,22 @@ def rollout(memory, env, policy):
     x = nx
   episode.append_last_obs(x)
   memory.append(episode)
-  return {'eps_reward': [eps_reward]}
+  return episode, eps_reward
 
 
-def evaluate(memory, model, path, eps):
+def evaluate(memory, policy, model, env, path, eps):
   model.eval()
-  (x, u, _, _), lens = memory.sample(1)
-  states, priors, posteriors = model(x, u)
+  eps_rewards = []
+  for i in trange(10, desc='Eval Episodes', leave=False):
+    episode, eps_reward = rollout(memory, env, policy)
+    eps_rewards.append(eps_reward)
+  (x, u, _, _) = episode.prepare()
+  states, priors, posteriors = model(x[None], u[None])
   states = states.squeeze()
   pred1 = model.decoder(states, priors['means'].squeeze())
   pred2 = model.decoder(states, posteriors['means'].squeeze())
-  save_frames(x[0], pred1, pred2, f'{path}_{eps}')
+  save_frames(x, pred1, pred2, f'{path}_{eps}')
+  return {'eps_reward': eps_rewards}
 
 
 def main():
@@ -117,21 +126,26 @@ def main():
     rssm, PLANNING_HORIZON, NUM_OPTIM_CANDIDATES, env.action_size,
     NUM_OPTIM_ITERS, TOP_OPTIM_CANDIDATES
   ).to(device)
+
   memory = load_memory('test_exp_replay.pth', device)
   # pdb.set_trace()  
   global_metrics = defaultdict(list)
   for i in trange(1000, desc='# Episode: ', leave=False):
+    # Train on memory
     metrics = train(memory, rssm, optimizer, record_grads=False)
-    # pdb.set_trace()
-    rollout_metrics = rollout(memory, env, policy)
-    metrics.update(rollout_metrics)
+
+    # checkpoint
+    if (i + 1) % 25 == 0:
+      torch.save(rssm.state_dict(), f'results/test_rssm/ckpt_{i+1}.pth')
+
+    # Evaluate and Save Predictions
+    if (i + 1) % 10 == 0:
+      mx = evaluate(memory, policy, rssm, env, 'results/test_rssm/eps', i + 1)
+      metrics.update(mx)
+    # Plot Data
     for k, v in metrics.items():
       global_metrics[k].extend(metrics[k])
     plot_metrics(global_metrics, path='results/test_rssm', prefix='TRAIN_')
-    if (i + 1) % 10 == 0:
-      evaluate(memory, rssm, 'results/test_rssm/eps', i + 1)
-    if (i + 1) % 25 == 0:
-      torch.save(rssm.state_dict(), f'results/test_rssm/ckpt_{i+1}.pth')
   pdb.set_trace()
 
 

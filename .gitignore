@@ -6,3 +6,4 @@ results/*
 *.gv
 *.html
 stm*
+.vscode

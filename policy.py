@@ -36,7 +36,7 @@ class CrossEntropyBasedOptimizer(nn.Module):
     self.clear()
     observation = observation.expand(self.N, 1, *observation.shape)
     with torch.no_grad():
-      for _ in trange(self.T, leave=False):
+      for _ in range(self.T):
         actions = Normal(self.mu, self.stddev).sample((self.N,))
         state, priors = self.model(observation, actions)
         r = self.model.pred_reward(state, priors['means']).sum(-1)

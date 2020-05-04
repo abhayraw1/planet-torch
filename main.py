@@ -1,71 +1,113 @@
-import gym
 import pdb
-import tqdm
-import pickle
+import torch
+from tqdm import trange
+from functools import partial
+from collections import defaultdict
+
+
+from torch.distributions import Normal, kl
+from torch.distributions.kl import kl_divergence
 
 from utils import *
 from memory import *
-from models.dssm import *
-from models.sssm import *
-from models.models import *
+from rssm_model import *
+from rssm_policy import *
+from rollout_generator import RolloutGenerator
 
-from torch.distributions import kl, Normal
+def train(memory, rssm, optimizer, device, N=16, H=40):
+    batch = memory.sample(N, H, time_first=True)
+    x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]
+    preprocess_img(x, depth=5)
+    h_t = torch.zeros(N, rssm.state_size).to(device)
+    s_t = torch.zeros(N, rssm.latent_size).to(device)
+    a_t = torch.zeros(N, rssm.action_size).to(device)
+    free_nats = torch.ones_like(a_t.flatten())*3.0
+    h_t, s_t = rssm.get_init_state(rssm.encoder(x[0]), h_t, s_t, a_t)
+    kl_loss, rc_loss, re_loss = 0, 0, 0
+    for i, a_t in enumerate(torch.unbind(u, dim=0)):
+        h_t = rssm.deterministic_state_fwd(h_t, s_t, a_t)
+        sm_t, ss_t = rssm.state_prior(h_t)
+        pm_t, ps_t = rssm.state_posterior(h_t, rssm.encoder(x[i + 1]))
+        s_t = pm_t + torch.randn_like(pm_t)*ps_t
+        rec = rssm.decoder(h_t, s_t)
+        kl_div = kl_divergence(Normal(pm_t, ps_t), Normal(sm_t, ss_t))
+        kl_loss += torch.max(free_nats, kl_div.sum(-1)).mean()
+        rc_loss += ((rec - x[i+1])**2).sum((1, 2, 3)).mean()
+        re_loss += F.mse_loss(rssm.pred_reward(h_t, s_t), r[i])
 
-BIT_DEPTH = 5
-STATE_SIZE = 200
-LATENT_SIZE = 30
-EMBEDDING_SIZE = 1024
-
-
-def rollout(memory, env):
-    episode = Episode(memory.device, BIT_DEPTH)
-    x = env.reset()
-    for _ in range(env.env._max_episode_steps):
-        u = env.sample_random_action()
-        nx, r, d, _ = env.step(u)
-        episode.append(x, u, r, d)
-        x = nx
-    episode.append_last_obs(x)
-    memory.append(episode)
-
-
-def train(memory, model, i):
-    for _ in tqdm.tqdm(range(10)):
-        (x, u, _, _), lens = memory.sample(32)
-        kl_loss, rec_loss = model.train_on_batch(u, x, lens)
-    print(f'Loss @ Episode [{i+1}]: KL [{kl_loss}] REC [{rec_loss}]')
+    kl_loss, rc_loss, re_loss = [x/H for x in (kl_loss, rc_loss, re_loss)]
+    optimizer.zero_grad()
+    nn.utils.clip_grad_norm_(rssm.parameters(), 1000., norm_type=2)
+    (kl_loss + rc_loss + re_loss).backward()
+    optimizer.step()
+    return {'kl': kl_loss.item(), 'rc': rc_loss.item(), 're': re_loss.item()}
 
 
 def main():
-    env = TorchImageEnvWrapper('Pendulum-v0', BIT_DEPTH)
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    detssm = StochasticStateSpaceModel(
-        1, STATE_SIZE, LATENT_SIZE, EMBEDDING_SIZE
-    ).to(device)
+    env = TorchImageEnvWrapper('Pendulum-v0', bit_depth=5)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    rssm_model = RecurrentStateSpaceModel(env.action_size).to(device)
+    optimizer = torch.optim.Adam(rssm_model.parameters(), lr=1e-3)
+    policy = RSSMPolicy(
+        rssm_model, 
+        planning_horizon=12,
+        num_candidates=1000,
+        num_iterations=10,
+        top_candidates=20,
+        device=device
+    )
+    rollout_gen = RolloutGenerator(
+        env,
+        device,
+        policy=policy,
+        episode_gen=lambda : Episode(partial(postprocess_img, depth=5)),
+        max_episode_steps=100,
+    )
+    mem = Memory(100)
+    mem.append(rollout_gen.rollout_n(15, random_policy=True))
+    metrics = defaultdict(list)
+    for i in trange(100, desc='Epoch', leave=False):
+        for _ in trange(150, desc='Iter ', leave=False):
+            losses = train(mem, rssm_model.train(), optimizer, device)
+            for k, v in losses.items():
+                metrics[k].append(v)
+        mem.append(rollout_gen.rollout_once(explore=True))
+        # pdb.set_trace()
+        print(losses)
+        eval_episode, eval_frames, eval_rec_loss = rollout_gen.rollout_eval()
+        mem.append(eval_episode)
+        save_video(eval_frames, 'results', f'vid_{i+1}')
+        metrics['eval_rec_loss'].append(eval_rec_loss)
 
-    test_eps = Memory(20, device, 50)
-    for _ in range(20):
-        rollout(test_eps, env)
-    env.close()
+        for k, v in metrics.items():
+            lineplot(np.arange(len(v)), v, k, path='results')
+
+        if (i + 1) % 25 == 0:
+            torch.save(rssm_model.state_dict(), f'results/ckpt_{i+1}.pth')
+
+    pdb.set_trace()
+        # episode_to_videos
+        # evaluate(mem, rssm_model.eval(), device, save_video=True)
+
+
+    """
+    Do training here !!
+    1. Sample a batch of experience from the memory
+    2. Do as fwd pass like policy wala
+    3. compute duniya bhar ka loss
+    4. backprop
+    5. do an evaluation
+    """
+
+
+
+
+        # loss ??
+
+
 
     
-    with open('memory.pth', 'rb') as f:
-        memory = pickle.load(f)
-        memory.device = device
-        for e in memory.data:
-            e.device = device
-
-    for i in tqdm.tqdm(range(1000)):
-        ready_to_train = memory.size > 50
-        # rollout(memory, env)
-        if ready_to_train:
-            train(memory, detssm, i)
-            if (i + 1) % 10 == 0:
-                (x, u, _, _), _ = test_eps.sample(1)
-                detssm.evaluate(u, x, i + 1, 'results/test_sssm/eps')
-            
-    pdb.set_trace()
-
+    
 
 if __name__ == '__main__':
     main()

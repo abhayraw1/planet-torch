@@ -16,7 +16,7 @@ class RecurrentStateSpaceModel(nn.Module):
   def __init__(self, action_size, state_size, latent_size, encoding_size):
     super().__init__()
     ip_latent_act = latent_size + action_size
-    ip_posteriors = encoding_size + state_size
+    ip_posteriors = encoding_size + latent_size + state_size
     # add later? not training it right now =--------
     ip_init_state = encoding_size# + state_size <--|
     self.encoder = EncoderModel(encoding_size)
@@ -67,21 +67,26 @@ class RecurrentStateSpaceModel(nn.Module):
     """
     n, t, c, h, w = observations.shape
     en = self.encoder(observations.view(n*t, c, h, w)).view(n, t, -1)
-    sm, sd = self.init_state_model(en[:, 0])
-    s0 = sm + torch.randn_like(sm)*sd
+    # sm, sd = self.init_state_model(en[:, 0])
+    # s0 = sm + torch.randn_like(sm)*sd
+    s0 = Normal(*self.init_state_model(en[:, 0])).rsample()
     states, priors = self.get_priors_and_states(s0, actions)
 
     if t == 1:
       return states, priors
     # pdb.set_trace()
-    pm, ps = self.posterior_model(torch.cat([states[:, 0], en[:, 0]], dim=-1))
+    pm, ps = self.posterior_model(
+      torch.cat([states[:, 0], en[:, 0], priors['samples'][:, 0]], dim=-1)
+    )
     posteriors = {
       'means': [pm],
       'stddevs': [ps],
       'samples': [pm + torch.randn_like(pm)*ps]
     }
     for i in range(1, actions.size(1) + 1):
-      pm, ps = self.posterior_model(torch.cat([states[:, i], en[:, i]], dim=-1))
+      pm, ps = self.posterior_model(
+        torch.cat([states[:, i], en[:, i], priors['samples'][:, 0]], dim=-1)
+      )
       posteriors['means'].append(pm)
       posteriors['stddevs'].append(ps)
       posteriors['samples'].append(pm + torch.randn_like(pm)*ps)

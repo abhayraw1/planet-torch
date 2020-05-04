@@ -9,91 +9,83 @@ from torch import float32 as F32
 from torch.nn.utils.rnn import pad_sequence
 
 class Episode:
-    def __init__(self, device, bit_depth):
-        self.device = device
-        self.bit_depth = bit_depth
-        self.clear()
+    """Records the agent's interaction with the environment for a single
+    episode. At termination, it converts all the data to Numpy arrays.
+    """
+    def __init__(self, postprocess_fn=lambda x: x):
+        self.x = []
+        self.u = []
+        self.t = []
+        self.r = []
+        self.postprocess_fn = postprocess_fn
+        self._size = 0
 
     @property
     def size(self):
         return self._size
 
-    def clear(self):
-        self.x = []
-        self.u = []
-        self.d = []
-        self.r = []
-        self._size = 0
-
-    def append(self, x, u, r, d):
+    def append(self, obs, act, reward, terminal):
         self._size += 1
-        self.x.append(postprocess_img(x.numpy(), self.bit_depth))
-        self.u.append(u.numpy())
-        self.r.append(r)
-        self.d.append(d)
+        self.x.append(self.postprocess_fn(obs.numpy()))
+        self.u.append(act.cpu().numpy())
+        self.r.append(reward)
+        self.t.append(terminal)
 
-    def append_last_obs(self, x):
-        self.x.append(postprocess_img(x.numpy(), self.bit_depth))
-
-    def prepare(self, s=0, e=None):
-        e = e or self.size
-        prossx = torch.tensor(self.x[s:e+1], dtype=F32, device=self.device)
-        preprocess_img(prossx, self.bit_depth),
-        return (
-            prossx,
-            torch.tensor(self.u[s:e], dtype=F32, device=self.device),
-            torch.tensor(self.r[s:e], dtype=F32, device=self.device),
-            torch.tensor(self.d[s:e], dtype=F32, device=self.device),
-        )
+    def terminate(self, obs):
+        self.x.append(self.postprocess_fn(obs.numpy()))
+        self.x = np.stack(self.x)
+        self.u = np.stack(self.u)
+        self.r = np.stack(self.r)
+        self.t = np.stack(self.t)
 
 
-class Memory:
-    def __init__(self, size, device, tracelen):
-        self.device = device
-        self._shapes = None
-        self.tracelen = tracelen
-        self.data = deque(maxlen=size)
-        self._empty_batch = None
+class Memory(deque):
+    def __init__(self, size):
+        """Maintains a FIFO list of `size` number of episodes.
+        """
+        self.episodes = deque(maxlen=size)
+        self.eps_lengths = deque(maxlen=size)
+        print(f'Creating memory with len {size} episodes.')
 
     @property
     def size(self):
-        return len(self.data)
+        return sum(self.eps_lengths)
 
-    @property
-    def shapes(self):
-        return self._shapes
+    def _append(self, episode: Episode):
+        if isinstance(episode, Episode):
+            self.episodes.append(episode)
+            self.eps_lengths.append(episode.size)
+        else:
+            raise ValueError('can only append <Episode> or list of <Episode>')
 
-    def get_empty_batch(self, batch_size):
-        if self._empty_batch is None or\
-            self._empty_batch[0].size(0) != batch_size:
-            data = []
-            for i, s in enumerate(self.shapes):
-                h = self.tracelen + 1 if not i else self.tracelen
-                data.append(torch.zeros(batch_size, h, *s).to(self.device))
-            self._empty_batch = data
-        return [x.clone() for x in self._empty_batch]
-    
-    def append(self, episode: Episode):
-        self.data.append(episode)
-        if self.shapes is None:
-            # Store the shapes of objects
-            self._shapes = [a.shape[1:] for a in episode.prepare(e=1)]
+    def append(self, episodes):
+        if isinstance(episodes, Episode):
+            episodes = [episodes]
+        if isinstance(episodes, list):
+            for e in episodes:
+                self._append(e)
+        else:
+            raise ValueError('can only append <Episode> or list of <Episode>')
 
-    def sample(self, batch_size):
-        episode_idx = choice(self.size, batch_size)
-        init_st_idx = [choice(self.data[i].size) for i in episode_idx]
-        data = self.get_empty_batch(batch_size)
-        # xx, uu, rr, dd = [], [], [], []
-        seq_lengths = []
-        try:
-            for n, (i, s) in enumerate(zip(episode_idx, init_st_idx)):
-                x, u, r, d = self.data[i].prepare(s, s + self.tracelen)
-                data[0][n, :x.size(0)] = x
-                data[1][n, :u.size(0)] = u
-                data[2][n, :r.size(0)] = r
-                data[3][n, :d.size(0)] = d
-                seq_lengths.append(len(d))
-            return data, seq_lengths
-        except Exception as e:
-            print(e)
-            pdb.set_trace()
+    def sample(self, batch_size, tracelen=1, time_first=False):
+        episode_idx = choice(len(self.episodes), batch_size)
+        init_st_idx = [
+            choice(self.eps_lengths[i] - tracelen + 1)
+            for i in episode_idx
+        ]
+        x, u, r, t = [], [], [], []
+        for n, (i, s) in enumerate(zip(episode_idx, init_st_idx)):
+            x.append(self.episodes[i].x[s: s + tracelen + 1])
+            u.append(self.episodes[i].u[s: s + tracelen])
+            r.append(self.episodes[i].r[s: s + tracelen])
+            t.append(self.episodes[i].t[s: s + tracelen])
+        if tracelen == 1:
+            rets = [np.stack(x)] + [np.stack(i)[:, 0] for i in (u, r, t)]
+        else:
+            rets = [np.stack(i) for i in (x, u, r, t)]
+        if time_first:
+            rets = [
+                a.transpose(1, 0, *range(2, 2 + len(a.shape[2:])))
+                for a in rets
+            ]
+        return rets

@@ -73,7 +73,6 @@ class Memory(deque):
             choice(self.eps_lengths[i] - tracelen + 1)
             for i in episode_idx
         ]
-        print(list(zip(episode_idx, init_st_idx)))
         x, u, r, t = [], [], [], []
         for n, (i, s) in enumerate(zip(episode_idx, init_st_idx)):
             x.append(self.episodes[i].x[s: s + tracelen + 1])

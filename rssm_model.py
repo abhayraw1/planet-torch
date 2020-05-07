@@ -55,13 +55,16 @@ class VisualDecoder(nn.Module):
 
 
 class RecurrentStateSpaceModel(nn.Module):
+    """Recurrent State Space Model
+    """
+
     def __init__(self,
             action_size,
             state_size=200,
             latent_size=30,
-            hidden_size=128,
+            hidden_size=200,
             embed_size=1024,
-            activation_function='relu'
+            activation_function='elu'
         ):
         super().__init__()
         self.state_size = state_size
@@ -89,7 +92,9 @@ class RecurrentStateSpaceModel(nn.Module):
         return h_t, s_tp1
 
     def deterministic_state_fwd(self, h_t, s_t, a_t):
-        """Returns h_tp1 = f(h_t, s_t, a_t)"""
+        """Returns the deterministic state given the previous states
+        and action.
+        """
         h = torch.cat([s_t, a_t], dim=-1)
         h = self.act_fn(self.lat_act_layer(h))
         return self.grucell(h, h_t)

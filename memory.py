@@ -85,8 +85,5 @@ class Memory(deque):
         else:
             rets = [np.stack(i) for i in (x, u, r, t)]
         if time_first:
-            rets = [
-                a.transpose(1, 0, *range(2, 2 + len(a.shape[2:])))
-                for a in rets
-            ]
+            rets = [a.swaoaxes(1, 0) for a in rets]
         return rets

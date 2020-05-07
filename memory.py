@@ -58,7 +58,7 @@ class Memory(deque):
         else:
             raise ValueError('can only append <Episode> or list of <Episode>')
 
-    def append(self, episodes):
+    def append(self, episodes: [Episode]):
         if isinstance(episodes, Episode):
             episodes = [episodes]
         if isinstance(episodes, list):

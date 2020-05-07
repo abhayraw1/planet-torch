@@ -37,9 +37,7 @@ class RSSMPolicy:
         assert len(observation.shape) == 3, 'obs should be [CHW]'
         # pdb.set_trace()
         self.prev_state, self.prev_latent = self.rssm.get_init_state(
-            self.rssm.encoder(observation[None]),
-            self.prev_state, self.prev_latent, self.prev_action
-        )
+            self.rssm.encoder(observation[None]))
         h_t = self.prev_state.expand(self.N, -1).clone()
         s_t = self.prev_latent.expand(self.N, -1).clone()
         for _ in range(self.T):

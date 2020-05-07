@@ -28,7 +28,7 @@ class VisualEncoder(nn.Module):
         return hidden
 
 
-class VisualObservationModel(nn.Module):
+class VisualDecoder(nn.Module):
     def __init__(self,
             state_size,
             latent_size,
@@ -69,9 +69,7 @@ class RecurrentStateSpaceModel(nn.Module):
         self.latent_size = latent_size
         self.act_fn = getattr(F, activation_function)
         self.encoder = VisualEncoder(embed_size)
-        self.decoder = VisualObservationModel(
-            state_size, latent_size, embed_size
-        )
+        self.decoder = VisualDecoder(state_size, latent_size, embed_size)
         self.grucell = nn.GRUCell(state_size, state_size)
         self.lat_act_layer = nn.Linear(latent_size + action_size, state_size)
         self.fc_prior_1 = nn.Linear(state_size, hidden_size)
@@ -84,10 +82,11 @@ class RecurrentStateSpaceModel(nn.Module):
         self.fc_reward_2 = nn.Linear(hidden_size, 1)
 
 
-    def get_init_state(self, enc, h_t, s_t, a_t):
-        h_tp1 = self.deterministic_state_fwd(h_t, s_t, a_t)
+    def get_init_state(self, enc):
+        """Returns the initial posterior given the observation."""
+        h_t = torch.zeros(enc.size(0), self.state_size).to(enc.device)
         s_tp1 = self.state_posterior(h_t, enc, sample=True)
-        return h_tp1, s_tp1
+        return h_t, s_tp1
 
     def deterministic_state_fwd(self, h_t, s_t, a_t):
         """Returns h_tp1 = f(h_t, s_t, a_t)"""

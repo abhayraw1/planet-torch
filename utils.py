@@ -167,13 +167,13 @@ class TorchImageEnvWrapper:
         return x
 
     def step(self, u):
-        u = u.cpu().detach().numpy()
+        u, rwds = u.cpu().detach().numpy(), 0
         for _ in range(self.action_repeats - 1):
-            self.env.step(u)
-        _, r, d, i = self.env.step(u)
+            _, r, d, i = self.env.step(u)
+            rwds += r
         x = to_tensor_obs(self.env.render(mode='rgb_array'))
         preprocess_img(x, self.bit_depth)
-        return x, r, d, i
+        return x, rwds, d, i
 
     def render(self):
         self.env.render()

@@ -41,7 +41,7 @@ class RolloutGenerator:
             else:
                 act = self.policy.poll(obs.to(self.device)).flatten()
                 if explore:
-                    act += torch.randn_like(act)*0.2
+                    act += torch.randn_like(act)*0.3
             nobs, reward, terminal, _ = self.env.step(act)
             eps.append(obs, act, reward, terminal)
             obs = nobs

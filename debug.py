@@ -18,11 +18,9 @@ def train(memory, rssm, optimizer, device, N=16, H=50):
     batch = memory.sample(N, H, time_first=True)
     x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]
     preprocess_img(x, depth=5)
-    h_t = torch.zeros(N, rssm.state_size).to(device)
-    s_t = torch.zeros(N, rssm.latent_size).to(device)
     a_t = torch.zeros(N, rssm.action_size).to(device)
     free_nats = torch.ones_like(a_t.flatten())*3.0
-    h_t, s_t = rssm.get_init_state(rssm.encoder(x[0]), h_t, s_t, a_t)
+    h_t, s_t = rssm.get_init_state(rssm.encoder(x[0]))
     kl_loss, rc_loss, re_loss = 0, 0, 0
     for i, a_t in enumerate(torch.unbind(u, dim=0)):
         h_t = rssm.deterministic_state_fwd(h_t, s_t, a_t)
@@ -32,15 +30,43 @@ def train(memory, rssm, optimizer, device, N=16, H=50):
         rec = rssm.decoder(h_t, s_t)
         kl_div = kl_divergence(Normal(pm_t, ps_t), Normal(sm_t, ss_t))
         kl_loss += torch.max(free_nats, kl_div.sum(-1)).mean()
-        rc_loss += ((rec - x[i+1])**2).sum((1, 2, 3)).mean()
+        rc_loss += ((rec - x[i + 1]).abs()).sum((1, 2, 3)).mean()
         re_loss += F.mse_loss(rssm.pred_reward(h_t, s_t), r[i])
 
     kl_loss, rc_loss, re_loss = [x/H for x in (kl_loss, rc_loss, re_loss)]
     optimizer.zero_grad()
-    nn.utils.clip_grad_norm_(rssm.parameters(), 1000., norm_type=2)
+    nn.utils.clip_grad_norm_(rssm.parameters(), 100., norm_type=2)
     (kl_loss + rc_loss + re_loss).backward()
     optimizer.step()
     return {'kl': kl_loss.item(), 'rc': rc_loss.item(), 're': re_loss.item()}
+
+
+def train_with_latent_overshoot(memory, rssm, opt, device, N=16, H=50, D=5):
+    batch = memory.sample(N, H, time_first=True)
+    x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]
+    preprocess_img(x, depth=5)
+    a_t = torch.zeros(N, rssm.action_size).to(device)
+    free_nats = torch.ones_like(a_t.flatten())*2.0
+    h_t, s_t = rssm.get_init_state(rssm.encoder(x[0]))
+    kl_loss, rc_loss, re_loss = 0, 0, 0
+    for i, a_t in enumerate(torch.unbind(u, dim=0)):
+        h_t = rssm.deterministic_state_fwd(h_t, s_t, a_t)
+        sm_t, ss_t = rssm.state_prior(h_t)
+        pm_t, ps_t = rssm.state_posterior(h_t, rssm.encoder(x[i + 1]))
+        s_t = pm_t + torch.randn_like(pm_t)*ps_t
+        rec = rssm.decoder(h_t, s_t)
+        kl_div = kl_divergence(Normal(pm_t, ps_t), Normal(sm_t, ss_t))
+        kl_loss += torch.max(free_nats, kl_div.sum(-1)).mean()
+        rc_loss += ((rec - x[i + 1])**2).sum((1, 2, 3)).mean()
+        re_loss += F.mse_loss(rssm.pred_reward(h_t, s_t), r[i])
+
+    kl_loss, rc_loss, re_loss = [x/H for x in (kl_loss, rc_loss, re_loss)]
+    opt.zero_grad()
+    nn.utils.clip_grad_norm_(rssm.parameters(), 100., norm_type=2)
+    (kl_loss + rc_loss + re_loss).backward()
+    opt.step()
+    return {'kl': kl_loss.item(), 'rc': rc_loss.item(), 're': re_loss.item()}
+
 
 
 def main():
@@ -65,7 +91,7 @@ def main():
     )
     mem = Memory(100)
     mem.append(rollout_gen.rollout_n(15, random_policy=True))
-    rssm_model.load_state_dict(torch.load('results/ckpt_100.pth'))
+    # rssm_model.load_state_dict(torch.load('results/ckpt_100.pth'))
     pdb.set_trace()
         # episode_to_videos
         # evaluate(mem, rssm_model.eval(), device, save_video=True)
@@ -78,16 +104,7 @@ def main():
     3. compute duniya bhar ka loss
     4. backprop
     5. do an evaluation
-    """
-
-
-
-
-        # loss ??
-
-
-
-    
+    """  
     
 
 if __name__ == '__main__':

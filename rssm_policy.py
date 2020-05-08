@@ -37,17 +37,19 @@ class RSSMPolicy:
         assert len(observation.shape) == 3, 'obs should be [CHW]'
         # pdb.set_trace()
         self.prev_state, self.prev_latent = self.rssm.get_init_state(
-            self.rssm.encoder(observation[None]))
+            self.rssm.encoder(observation[None]),
+            self.prev_state, self.prev_latent, self.prev_action
+        )
         h_t = self.prev_state.expand(self.N, -1).clone()
         s_t = self.prev_latent.expand(self.N, -1).clone()
         for _ in range(self.T):
+            rwds = torch.zeros(self.N).to(self.device)
             actions = Normal(self.mu, self.stddev).sample((self.N,))
-            rewards = torch.zeros(self.N).to(self.device)
             for a_t in torch.unbind(actions, dim=1):
                 h_t = self.rssm.deterministic_state_fwd(h_t, s_t, a_t)
                 s_t = self.rssm.state_prior(h_t, sample=True)
-                rewards += self.rssm.pred_reward(h_t, s_t)
-            _, k = torch.topk(rewards, self.K, 0, largest=True, sorted=False)
+                rwds += self.rssm.pred_reward(h_t, s_t)
+            _, k = torch.topk(rwds, self.K, dim=0, largest=True, sorted=False)
             self.mu = actions[k].mean(dim=0)
             self.stddev = actions[k].std(dim=0)
         # print(self.mu.cpu().numpy())

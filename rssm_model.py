@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 
 class VisualEncoder(nn.Module):
-    def __init__(self, embedding_size, activation_function='relu'):
+    def __init__(self, embedding_size, activation_function='elu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.embedding_size = embedding_size
@@ -33,7 +33,7 @@ class VisualDecoder(nn.Module):
             state_size,
             latent_size,
             embedding_size,
-            activation_function='relu'
+            activation_function='elu'
         ):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
@@ -85,11 +85,11 @@ class RecurrentStateSpaceModel(nn.Module):
         self.fc_reward_2 = nn.Linear(hidden_size, 1)
 
 
-    def get_init_state(self, enc):
+    def get_init_state(self, enc, h_t, s_t, a_t):
         """Returns the initial posterior given the observation."""
-        h_t = torch.zeros(enc.size(0), self.state_size).to(enc.device)
+        h_tp1 = self.deterministic_state_fwd(h_t, s_t, a_t)
         s_tp1 = self.state_posterior(h_t, enc, sample=True)
-        return h_t, s_tp1
+        return h_tp1, s_tp1
 
     def deterministic_state_fwd(self, h_t, s_t, a_t):
         """Returns the deterministic state given the previous states
@@ -100,18 +100,20 @@ class RecurrentStateSpaceModel(nn.Module):
         return self.grucell(h, h_t)
 
     def state_prior(self, h_t, sample=False):
+        """Returns the state prior given the deterministic state."""
         z = self.act_fn(self.fc_prior_1(h_t))
         m = self.fc_prior_m(z)
-        s = F.softplus(self.fc_prior_s(z))# + 1e-1
+        s = F.softplus(self.fc_prior_s(z)) + 1e-1
         if sample:
             return m + torch.randn_like(m) * s
         return m, s
 
     def state_posterior(self, h_t, e_t, sample=False):
+        """Returns the state prior given the deterministic state and obs."""
         z = torch.cat([h_t, e_t], dim=-1)
         z = self.act_fn(self.fc_posterior_1(z))
         m = self.fc_posterior_m(z)
-        s = F.softplus(self.fc_posterior_s(z))# + 1e-1
+        s = F.softplus(self.fc_posterior_s(z)) + 1e-1
         if sample:
             return m + torch.randn_like(m) * s
         return m, s

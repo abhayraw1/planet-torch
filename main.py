@@ -15,7 +15,7 @@ from rssm_policy import *
 from rollout_generator import RolloutGenerator
 
 def train(memory, rssm, optimizer, device, N=16, H=40):
-    free_nats = torch.ones(N, device=device)*3.0
+    free_nats = torch.ones(1, device=device)*3.0
     batch = memory.sample(N, H, time_first=True)
     x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]
     preprocess_img(x, depth=5)
@@ -31,14 +31,14 @@ def train(memory, rssm, optimizer, device, N=16, H=40):
         s_t = pm_t + torch.randn_like(pm_t)*ps_t
         rec = rssm.decoder(h_t, s_t)
         kl_div = kl_divergence(Normal(pm_t, ps_t), Normal(sm_t, ss_t))
-        kl_loss += torch.max(free_nats, kl_div.sum(-1)).mean()
+        kl_loss += kl_div.sum(-1).mean()
         rc_loss += ((rec - x[i + 1]).abs()).sum((1, 2, 3)).mean()
         re_loss += F.mse_loss(rssm.pred_reward(h_t, s_t), r[i])
 
     kl_loss, rc_loss, re_loss = [x/H for x in (kl_loss, rc_loss, re_loss)]
     optimizer.zero_grad()
     nn.utils.clip_grad_norm_(rssm.parameters(), 100., norm_type=2)
-    (kl_loss + rc_loss + re_loss).backward()
+    (torch.max(kl_loss, free_nats) + rc_loss + re_loss).backward()
     optimizer.step()
     return {'kl': kl_loss.item(), 'rc': rc_loss.item(), 're': re_loss.item()}
 

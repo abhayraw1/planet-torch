@@ -40,8 +40,8 @@ class RSSMPolicy:
             self.rssm.encoder(observation[None]),
             self.prev_state, self.prev_latent, self.prev_action
         )
-        h_t = self.prev_state.expand(self.N, -1).clone()
-        s_t = self.prev_latent.expand(self.N, -1).clone()
+        h_t = self.prev_state.clone().expand(self.N, -1)
+        s_t = self.prev_latent.clone().expand(self.N, -1)
         for _ in range(self.T):
             rwds = torch.zeros(self.N).to(self.device)
             actions = Normal(self.mu, self.stddev).sample((self.N,))

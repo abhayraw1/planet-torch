@@ -41,8 +41,8 @@ def preprocess_img(image, depth):
     Also adds some noise to the observations !!
     """
     image.div_(2 ** (8 - depth)).floor_().div_(2 ** depth).sub_(0.5)
-    image.add_(torch.rand_like(image).div_(2 ** depth))
-
+    image.add_(torch.randn_like(image).div_(2 ** depth)).clamp_(-0.5, 0.5)
+    
 
 def get_combined_params(*models):
     """
@@ -155,9 +155,10 @@ class TorchImageEnvWrapper:
     Torch Env Wrapper that wraps a gym env and makes interactions using Tensors.
     Also returns observations in image form.
     """
-    def __init__(self, env, bit_depth, observation_shape=None):
+    def __init__(self, env, bit_depth, observation_shape=None, act_rep=2):
         self.env = gym.make(env)
         self.bit_depth = bit_depth
+        self.action_repeats = act_rep
 
     def reset(self):
         self.env.reset()
@@ -166,7 +167,10 @@ class TorchImageEnvWrapper:
         return x
 
     def step(self, u):
-        _, r, d, i = self.env.step(u.cpu().detach().numpy())
+        u = u.cpu().detach().numpy()
+        for _ in range(self.action_repeats - 1):
+            self.env.step(u)
+        _, r, d, i = self.env.step(u)
         x = to_tensor_obs(self.env.render(mode='rgb_array'))
         preprocess_img(x, self.bit_depth)
         return x, r, d, i

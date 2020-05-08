@@ -5,7 +5,7 @@ from torch.nn import functional as F
 
 
 class VisualEncoder(nn.Module):
-    def __init__(self, embedding_size, activation_function='elu'):
+    def __init__(self, embedding_size, activation_function='relu'):
         super().__init__()
         self.act_fn = getattr(F, activation_function)
         self.embedding_size = embedding_size
@@ -33,7 +33,7 @@ class VisualDecoder(nn.Module):
             state_size,
             latent_size,
             embedding_size,
-            activation_function='elu'
+            activation_function='relu'
         ):
         super().__init__()
         self.act_fn = getattr(F, activation_function)

@@ -30,7 +30,7 @@ class RSSMPolicy:
         self.prev_latent = torch.zeros(1, self.latent_size).to(self.device)
         self.prev_action = torch.zeros(1, self.d).to(self.device)
 
-    def poll(self, observation):
+    def _poll(self, observation):
         self.mu = torch.zeros(self.H, self.d).to(self.device)
         self.stddev = torch.ones(self.H, self.d).to(self.device)
         # observation could be of shape [CHW] but only 1 timestep
@@ -55,3 +55,7 @@ class RSSMPolicy:
         # print(self.mu.cpu().numpy())
         self.prev_action = self.mu[0:1]
         return self.prev_action
+
+    def poll(self, observation):
+        with torch.no_grad():
+            return self._poll(observation)

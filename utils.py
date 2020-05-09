@@ -168,7 +168,7 @@ class TorchImageEnvWrapper:
 
     def step(self, u):
         u, rwds = u.cpu().detach().numpy(), 0
-        for _ in range(self.action_repeats - 1):
+        for _ in range(self.action_repeats):
             _, r, d, i = self.env.step(u)
             rwds += r
         x = to_tensor_obs(self.env.render(mode='rgb_array'))

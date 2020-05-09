@@ -9,7 +9,7 @@ import plotly
 import pathlib
 import numpy as np
 
-
+from collections import defaultdict
 from plotly.graph_objs import Scatter
 from plotly.graph_objs.scatter import Line
 
@@ -43,6 +43,15 @@ def preprocess_img(image, depth):
     image.div_(2 ** (8 - depth)).floor_().div_(2 ** depth).sub_(0.5)
     image.add_(torch.randn_like(image).div_(2 ** depth)).clamp_(-0.5, 0.5)
     
+
+def bottle(func, *tensors):
+    """
+    Evaluates a func that operates in N x D with inputs of shape N x T x D 
+    """
+    n, t = tensors[0].shape[:2]
+    out = func(*[x.view(n*t, *x.shape[2:]) for x in tensors])
+    return out.view(n, t, *out.shape[1:])
+
 
 def get_combined_params(*models):
     """
@@ -101,6 +110,24 @@ def load_memory(path, device):
         for e in memory.data:
             e.device = device
     return memory
+
+
+class Metrics:
+    """Stores the metrics for an experiment
+    """
+    def __init__(self):
+        self.data = defaultdict(list)
+
+    def update(self, metrics: dict, prefix=''):
+        assert isinstance(metrics, dict), 'Can update using dict only!'
+        for key, val in metrics.items():
+            if isinstance(val, dict):
+                self.update(val, prefix=f'{key}.')
+            elif isinstance(val, list):
+                self.data[f'{prefix}{key}'].extend(val)
+            else:
+                self.data[f'{prefix}{key}'].append(val)
+
 
 def apply_model(model, inputs, ignore_dim=None):
     pass

@@ -68,17 +68,30 @@ class RolloutGenerator:
         obs = self.env.reset()
         des = f'{self.name} Eval Ts'
         frames = []
-        rec_loss = 0
+        metrics = {}
+        rec_losses = []
+        rew_losses = []
+        eps_reward = 0
         for _ in trange(self.max_episode_steps, desc=des, leave=False):
-            act = self.policy.poll(obs.to(self.device)).flatten()
-            dec = self.policy.rssm.decoder(
-                self.policy.prev_state,
-                self.policy.prev_latent
-            ).squeeze().detach().cpu()
-            rec_loss += ((obs - dec)**2).sum()
-            frames.append(make_grid([obs + 0.5, dec + 0.5], nrow=2).numpy())
+            with torch.no_grad():
+                act = self.policy.poll(obs.to(self.device)).flatten()
+                dec = self.policy.rssm.decoder(
+                    self.policy.prev_state,
+                    self.policy.prev_latent
+                ).squeeze().detach().cpu()
+                rec_losses.append(((obs - dec)**2).sum())
+                p_reward = self.policy.rssm.pred_reward(
+                    self.policy.prev_state,
+                    self.policy.prev_latent
+                ).cpu().numpy()
+                frames.append(make_grid([obs + 0.5, dec + 0.5], nrow=2).numpy())
             nobs, reward, terminal, _ = self.env.step(act)
             eps.append(obs, act, reward, terminal)
+            eps_reward += reward
             obs = nobs
+            rew_losses.append(abs(reward - p_reward.item()))
         eps.terminate(nobs)
-        return eps, np.stack(frames), rec_loss/self.max_episode_steps
+        metrics['eval_reward'] = eps_reward
+        metrics['eval_rc_loss'] = rec_losses
+        metrics['eval_reward_loss'] = rew_losses
+        return eps, np.stack(frames), metrics

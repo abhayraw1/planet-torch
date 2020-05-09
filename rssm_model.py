@@ -64,7 +64,7 @@ class RecurrentStateSpaceModel(nn.Module):
             latent_size=30,
             hidden_size=200,
             embed_size=1024,
-            activation_function='elu'
+            activation_function='relu'
         ):
         super().__init__()
         self.state_size = state_size
@@ -82,7 +82,8 @@ class RecurrentStateSpaceModel(nn.Module):
         self.fc_posterior_m = nn.Linear(hidden_size, latent_size)
         self.fc_posterior_s = nn.Linear(hidden_size, latent_size)
         self.fc_reward_1 = nn.Linear(state_size + latent_size, hidden_size)
-        self.fc_reward_2 = nn.Linear(hidden_size, 1)
+        self.fc_reward_2 = nn.Linear(hidden_size, hidden_size)
+        self.fc_reward_3 = nn.Linear(hidden_size, 1)
 
 
     def get_init_state(self, enc, h_t, s_t, a_t):
@@ -120,4 +121,5 @@ class RecurrentStateSpaceModel(nn.Module):
 
     def pred_reward(self, h_t, s_t):
         r = self.act_fn(self.fc_reward_1(torch.cat([h_t, s_t], dim=-1)))
-        return self.fc_reward_2(r).squeeze()
+        r = self.act_fn(self.fc_reward_2(r))
+        return self.fc_reward_3(r).squeeze()

@@ -14,7 +14,7 @@ from rssm_model import *
 from rssm_policy import *
 from rollout_generator import RolloutGenerator
 
-def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7):
+def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7, grads=False):
     free_nats = torch.ones(1, device=device)*3.0
     batch = memory.sample(N, H, time_first=True)
     x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]
@@ -57,11 +57,12 @@ def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7):
             'rc': rec_loss.item(),
             're': rew_loss.item()
         },
-        'grad_norms': {
+    }
+    if grads:
+        metrics['grad_norms'] = {
             k: 0 if v.grad is None else v.grad.norm().item()
             for k, v in rssm.named_parameters()
         }
-    }
     return metrics
 
 
@@ -87,7 +88,7 @@ def main():
     )
     mem = Memory(100)
     mem.append(rollout_gen.rollout_n(15, random_policy=True))
-    metrics = Metrics()
+    metrics = TensorBoardMetrics('results/')
     for i in trange(100, desc='Epoch', leave=False):
         for _ in trange(150, desc='Iter ', leave=False):
             train_metrics = train(mem, rssm_model.train(), optimizer, device)

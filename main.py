@@ -15,6 +15,14 @@ from rssm_policy import *
 from rollout_generator import RolloutGenerator
 
 def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7, grads=False):
+    """
+    Training implementation as indicated in:
+    Learning Latent Dynamics for Planning from Pixels
+    arXiv:1811.04551
+
+    (a.) The Standard Varioational Bound Method
+        using only single step predictions.
+    """
     free_nats = torch.ones(1, device=device)*3.0
     batch = memory.sample(N, H, time_first=True)
     x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]

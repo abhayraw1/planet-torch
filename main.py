@@ -84,14 +84,14 @@ def main():
         device,
         policy=policy,
         episode_gen=lambda : Episode(partial(postprocess_img, depth=5)),
-        max_episode_steps=50,
+        max_episode_steps=100,
     )
     mem = Memory(100)
-    mem.append(rollout_gen.rollout_n(5, random_policy=True))
+    mem.append(rollout_gen.rollout_n(15, random_policy=True))
     summary = TensorBoardMetrics('results/')
     for i in trange(100, desc='Epoch', leave=False):
         metrics = defaultdict(list)
-        for _ in trange(5, desc='Iter ', leave=False):
+        for _ in trange(150, desc='Iter ', leave=False):
             t_metrics = train(mem, rssm_model.train(), optimizer, device)
             for k, v in flatten_dict(train_metrics).items():
                 metrics[k].append(v)

@@ -1,3 +1,4 @@
+import pdb
 import numpy as np
 import torch
 from tqdm import trange
@@ -39,9 +40,7 @@ class RolloutGenerator:
             if random_policy:
                 act = self.env.sample_random_action()
             else:
-                act = self.policy.poll(obs.to(self.device)).flatten()
-                if explore:
-                    act += torch.randn_like(act)*0.3
+                act = self.policy.poll(obs.to(self.device), explore).flatten()
             nobs, reward, terminal, _ = self.env.step(act)
             eps.append(obs, act, reward, terminal)
             obs = nobs
@@ -70,7 +69,7 @@ class RolloutGenerator:
         frames = []
         metrics = {}
         rec_losses = []
-        rew_losses = []
+        pred_r, act_r = [], []
         eps_reward = 0
         for _ in trange(self.max_episode_steps, desc=des, leave=False):
             with torch.no_grad():
@@ -78,20 +77,23 @@ class RolloutGenerator:
                 dec = self.policy.rssm.decoder(
                     self.policy.prev_state,
                     self.policy.prev_latent
-                ).squeeze().detach().cpu()
-                rec_losses.append(((obs - dec)**2).sum())
-                p_reward = self.policy.rssm.pred_reward(
-                    self.policy.prev_state,
-                    self.policy.prev_latent
-                ).cpu().numpy()
-                frames.append(make_grid([obs + 0.5, dec + 0.5], nrow=2).numpy())
+                ).squeeze().cpu()
+                rec_losses.append(((obs - dec)**2).sum().item())
+                frames.append(
+                    make_grid([obs + 0.5, dec + 0.5], nrow=2).numpy()
+                )
+                pred_r.append(self.policy.rssm.pred_reward(
+                    self.policy.prev_state,self.policy.prev_latent
+                ).cpu().flatten().item())
             nobs, reward, terminal, _ = self.env.step(act)
             eps.append(obs, act, reward, terminal)
+            act_r.append(reward)
             eps_reward += reward
             obs = nobs
-            rew_losses.append(abs(reward - p_reward.item()))
         eps.terminate(nobs)
         metrics['eval_reward'] = eps_reward
         metrics['eval_rc_loss'] = rec_losses
-        metrics['eval_reward_loss'] = rew_losses
+        metrics['eval_reward_loss'] = abs(
+            np.array(act_r)[:-1] - np.array(pred_r)[1:]
+        )
         return eps, np.stack(frames), metrics

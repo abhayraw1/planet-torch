@@ -1,9 +1,12 @@
 import pdb
 import numpy as np
 import torch
+from collections import defaultdict
+
 from tqdm import trange
-from memory import Episode # this needs modification!
 from torchvision.utils import make_grid
+
+from memory import Episode # this needs modification!
 
 class RolloutGenerator:
     """Rollout generator class."""
@@ -91,9 +94,9 @@ class RolloutGenerator:
             eps_reward += reward
             obs = nobs
         eps.terminate(nobs)
-        metrics['eval_reward'] = eps_reward
-        metrics['eval_rc_loss'] = rec_losses
-        metrics['eval_reward_loss'] = abs(
+        metrics['eval/episode_reward'] = eps_reward
+        metrics['eval/reconstruction_loss'] = rec_losses
+        metrics['eval/reward_pred_loss'] = abs(
             np.array(act_r)[:-1] - np.array(pred_r)[1:]
         )
         return eps, np.stack(frames), metrics

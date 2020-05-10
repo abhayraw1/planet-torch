@@ -1,7 +1,6 @@
 import pdb
 import torch
 
-from base_policy import Policy
 from torch.distributions import Normal
 
 

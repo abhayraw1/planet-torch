@@ -13,6 +13,7 @@ from collections import defaultdict
 from plotly.graph_objs import Scatter
 from plotly.graph_objs.scatter import Line
 
+from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid, save_image
 
 
@@ -112,21 +113,46 @@ def load_memory(path, device):
     return memory
 
 
-class Metrics:
-    """Stores the metrics for an experiment
+def flatten_dict(data, sep='.', prefix=''):
+    """Flattens a nested dict into a dict.
+    eg. {'a': 2, 'b': {'c': 20}} -> {'a': 2, 'b.c': 20}
     """
-    def __init__(self):
-        self.data = defaultdict(list)
+    x = {}
+    for key, val in data.items():
+        if isinstance(val, dict):
+            x.update(flatten_dict(val, sep=sep, prefix=key))
+        else:
+            x[f'{prefix}{sep}{key}'] = val
+    return x
 
-    def update(self, metrics: dict, prefix=''):
-        assert isinstance(metrics, dict), 'Can update using dict only!'
-        for key, val in metrics.items():
-            if isinstance(val, dict):
-                self.update(val, prefix=f'{key}.')
-            elif isinstance(val, list):
-                self.data[f'{prefix}{key}'].extend(val)
-            else:
-                self.data[f'{prefix}{key}'].append(val)
+
+class TensorBoardMetrics:
+    """Plots and (optionally) stores metrics for an experiment.
+    """
+    def __init__(self, path):
+        self.writer = SummaryWriter(path)
+        self.steps = defaultdict(lambda: 0)
+        self.summary = {}
+
+    def assign_type(self, key, val):
+        if isinstance(val, (list, tuple)):
+            fun = lambda k, x, s: self.writer.add_histogram(k, np.array(x), s)
+            self.summary[key] = fun
+        elif isinstance(val, (np.ndarray, torch.Tensor)):
+            self.summary[key] = self.writer.add_histogram
+        elif isinstance(val, float) or isinstance(val, int):
+            self.summary[key] = self.writer.add_scalar
+        else:
+            raise ValueError(f'Datatype {type(val)} not allowed')
+    
+    def update(self, metrics: dict):
+        metrics = flatten_dict(metrics)
+        for key_dots, val in metrics.items():
+            key = key_dots.replace('.', '/')
+            if self.summary.get(key, None) is None:
+                self.assign_type(key, val)
+            self.summary[key](key, val, self.steps[key])
+            self.steps[key] += 1
 
 
 def apply_model(model, inputs, ignore_dim=None):

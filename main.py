@@ -54,8 +54,8 @@ def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7, grads=False):
     metrics = {
         'losses': {
             'kl': kld_loss.item(),
-            'rc': rec_loss.item(),
-            're': rew_loss.item()
+            'reconstruction': rec_loss.item(),
+            'reward_pred': rew_loss.item()
         },
     }
     if grads:
@@ -84,23 +84,24 @@ def main():
         device,
         policy=policy,
         episode_gen=lambda : Episode(partial(postprocess_img, depth=5)),
-        max_episode_steps=500,
+        max_episode_steps=50,
     )
     mem = Memory(100)
-    mem.append(rollout_gen.rollout_n(15, random_policy=True))
-    metrics = TensorBoardMetrics('results/')
+    mem.append(rollout_gen.rollout_n(5, random_policy=True))
+    summary = TensorBoardMetrics('results/')
     for i in trange(100, desc='Epoch', leave=False):
-        for _ in trange(150, desc='Iter ', leave=False):
-            train_metrics = train(mem, rssm_model.train(), optimizer, device)
-            metrics.update(train_metrics)
+        metrics = defaultdict(list)
+        for _ in trange(5, desc='Iter ', leave=False):
+            t_metrics = train(mem, rssm_model.train(), optimizer, device)
+            for k, v in flatten_dict(train_metrics).items():
+                metrics[k].append(v)
+        
+        summary.update(metrics)
         mem.append(rollout_gen.rollout_once(explore=True))
         eval_episode, eval_frames, eval_metrics = rollout_gen.rollout_eval()
         mem.append(eval_episode)
         save_video(eval_frames, 'results', f'vid_{i+1}')
-        metrics.update(eval_metrics)
-
-        for k, v in metrics.data.items():
-            lineplot(np.arange(len(v)), v, k, path='results')
+        summary.update(eval_metrics)
 
         if (i + 1) % 25 == 0:
             torch.save(rssm_model.state_dict(), f'results/ckpt_{i+1}.pth')

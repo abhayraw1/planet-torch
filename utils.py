@@ -5,13 +5,10 @@ import cv2
 import gym
 import torch
 import pickle
-import plotly
 import pathlib
 import numpy as np
 
 from collections import defaultdict
-from plotly.graph_objs import Scatter
-from plotly.graph_objs.scatter import Line
 
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid, save_image

@@ -14,7 +14,7 @@ from rssm_model import *
 from rssm_policy import *
 from rollout_generator import RolloutGenerator
 
-def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7, grads=False):
+def train(memory, rssm, optimizer, device, N=32, H=50, beta=1.0, grads=False):
     """
     Training implementation as indicated in:
     Learning Latent Dynamics for Planning from Pixels
@@ -27,11 +27,8 @@ def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7, grads=False):
     batch = memory.sample(N, H, time_first=True)
     x, u, r, t  = [torch.tensor(x).float().to(device) for x in batch]
     preprocess_img(x, depth=5)
-    h_t = torch.zeros(N, rssm.state_size).to(device)
-    s_t = torch.zeros(N, rssm.latent_size).to(device)
-    a_t = torch.zeros(N, rssm.action_size).to(device)
     e_t = bottle(rssm.encoder, x)
-    h_t, s_t = rssm.get_init_state(e_t[0], h_t, s_t, a_t)
+    h_t, s_t = rssm.get_init_state(e_t[0])
     kl_loss, rc_loss, re_loss = 0, 0, 0
     states, priors, posteriors, posterior_samples = [], [], [], []
     for i, a_t in enumerate(torch.unbind(u, dim=0)):
@@ -49,14 +46,14 @@ def train(memory, rssm, optimizer, device, N=16, H=50, beta=0.7, grads=False):
         reduction='none'
     ).sum((2, 3, 4)).mean()
     kld_loss = torch.max(
-        kl_divergence(posterior_dist, prior_dist).sum(-1).mean(),
+        kl_divergence(posterior_dist, prior_dist).sum(-1),
         free_nats
-    )
+    ).mean()
     rew_loss = F.mse_loss(
         bottle(rssm.pred_reward, states, posterior_samples), r
     )
     optimizer.zero_grad()
-    nn.utils.clip_grad_norm_(rssm.parameters(), 100., norm_type=2)
+    nn.utils.clip_grad_norm_(rssm.parameters(), 1000., norm_type=2)
     (beta*kld_loss + rec_loss + rew_loss).backward()
     optimizer.step()
     metrics = {
@@ -78,13 +75,13 @@ def main():
     env = TorchImageEnvWrapper('Pendulum-v0', bit_depth=5)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     rssm_model = RecurrentStateSpaceModel(env.action_size).to(device)
-    optimizer = torch.optim.Adam(rssm_model.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(rssm_model.parameters(), lr=1e-3, eps=1e-4)
     policy = RSSMPolicy(
         rssm_model, 
         planning_horizon=20,
         num_candidates=1000,
         num_iterations=10,
-        top_candidates=20,
+        top_candidates=100,
         device=device
     )
     rollout_gen = RolloutGenerator(
@@ -95,24 +92,28 @@ def main():
         max_episode_steps=100,
     )
     mem = Memory(100)
-    mem.append(rollout_gen.rollout_n(15, random_policy=True))
-    summary = TensorBoardMetrics('results/')
+    mem.append(rollout_gen.rollout_n(1, random_policy=True))
+    res_dir = 'results/'
+    summary = TensorBoardMetrics(f'{res_dir}/')
     for i in trange(100, desc='Epoch', leave=False):
-        metrics = defaultdict(list)
+        metrics = {}
         for _ in trange(150, desc='Iter ', leave=False):
-            t_metrics = train(mem, rssm_model.train(), optimizer, device)
+            train_metrics = train(mem, rssm_model.train(), optimizer, device)
             for k, v in flatten_dict(train_metrics).items():
+                if k not in metrics.keys():
+                    metrics[k] = []
                 metrics[k].append(v)
+                metrics[f'{k}_mean'] = np.array(v).mean()
         
         summary.update(metrics)
         mem.append(rollout_gen.rollout_once(explore=True))
         eval_episode, eval_frames, eval_metrics = rollout_gen.rollout_eval()
         mem.append(eval_episode)
-        save_video(eval_frames, 'results', f'vid_{i+1}')
+        save_video(eval_frames, res_dir, f'vid_{i+1}')
         summary.update(eval_metrics)
 
         if (i + 1) % 25 == 0:
-            torch.save(rssm_model.state_dict(), f'results/ckpt_{i+1}.pth')
+            torch.save(rssm_model.state_dict(), f'{res_dir}/ckpt_{i+1}.pth')
 
     pdb.set_trace()
 

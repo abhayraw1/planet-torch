@@ -25,24 +25,24 @@ class RSSMPolicy:
         self.latent_size = self.rssm.latent_size
 
     def reset(self):
-        self.prev_state = torch.zeros(1, self.state_size).to(self.device)
-        self.prev_latent = torch.zeros(1, self.latent_size).to(self.device)
-        self.prev_action = torch.zeros(1, self.d).to(self.device)
+        self.h = torch.zeros(1, self.state_size).to(self.device)
+        self.s = torch.zeros(1, self.latent_size).to(self.device)
+        self.a = torch.zeros(1, self.d).to(self.device)
 
-    def _poll(self, observation):
+    def _poll(self, obs):
         self.mu = torch.zeros(self.H, self.d).to(self.device)
         self.stddev = torch.ones(self.H, self.d).to(self.device)
         # observation could be of shape [CHW] but only 1 timestep
-        assert len(observation.shape) == 3, 'obs should be [CHW]'
-        self.prev_state, self.prev_latent = self.rssm.get_init_state(
+        assert len(obs.shape) == 3, 'obs should be [CHW]'
+        self.h, self.s = self.rssm.get_init_state(
             self.rssm.encoder(observation[None]),
-            self.prev_state, self.prev_latent, self.prev_action
+            self.h, self.s, self.a
         )
         for _ in range(self.T):
             rwds = torch.zeros(self.N).to(self.device)
             actions = Normal(self.mu, self.stddev).sample((self.N,))
-            h_t = self.prev_state.clone().expand(self.N, -1)
-            s_t = self.prev_latent.clone().expand(self.N, -1)
+            h_t = self.h.clone().expand(self.N, -1)
+            s_t = self.s.clone().expand(self.N, -1)
             for a_t in torch.unbind(actions, dim=1):
                 h_t = self.rssm.deterministic_state_fwd(h_t, s_t, a_t)
                 s_t = self.rssm.state_prior(h_t, sample=True)
@@ -50,11 +50,11 @@ class RSSMPolicy:
             _, k = torch.topk(rwds, self.K, dim=0, largest=True, sorted=False)
             self.mu = actions[k].mean(dim=0)
             self.stddev = actions[k].std(dim=0, unbiased=False)
-        self.prev_action = self.mu[0:1]
+        self.a = self.mu[0:1]
         
     def poll(self, observation, explore=False):
         with torch.no_grad():
             self._poll(observation)
             if explore:
-                self.prev_action += torch.randn_like(self.prev_action)*0.3
-            return self.prev_action
+                self.a += torch.randn_like(self.a)*0.3
+            return self.a

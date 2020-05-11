@@ -68,13 +68,13 @@ def save_video(frames, path, name):
     """
     Saves a video containing frames.
     """
-    frames = (frames*255).astype('uint8').transpose(0, 2, 3, 1)[..., ::-1]
+    frames = (frames*255).clip(0, 255).astype('uint8').transpose(0, 2, 3, 1)
     _, H, W, _ = frames.shape
     writer = cv2.VideoWriter(
         str(pathlib.Path(path)/f'{name}.mp4'),
         cv2.VideoWriter_fourcc(*'mp4v'), 25., (W, H), True
     )
-    for frame in frames:
+    for frame in frames[..., ::-1]:
         writer.write(frame)
     writer.release()
 

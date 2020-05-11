@@ -63,6 +63,17 @@ class RolloutGenerator:
             ret.append(self.rollout_once(random_policy=random_policy))
         return ret
 
+    def rollout_eval_n(self, n):
+        metrics = defaultdict(list)
+        episodes, frames = [], []
+        for _ in range(n):
+            e, f, m = self.rollout_eval()
+            episodes.append(e)
+            frames.append(f)
+            for k, v in m.items():
+                metrics[k].append(v)
+        return episodes, frames, metrics
+
     def rollout_eval(self):
         assert self.policy is not None, 'Policy is None!!'
         self.policy.reset()
@@ -78,15 +89,13 @@ class RolloutGenerator:
             with torch.no_grad():
                 act = self.policy.poll(obs.to(self.device)).flatten()
                 dec = self.policy.rssm.decoder(
-                    self.policy.prev_state,
-                    self.policy.prev_latent
-                ).squeeze().cpu()
-                rec_losses.append(((obs - dec)**2).sum().item())
-                frames.append(
-                    make_grid([obs + 0.5, dec + 0.5], nrow=2).numpy()
-                )
+                    self.policy.h,
+                    self.policy.s
+                ).squeeze().cpu().clamp_(-0.5, 0.5)
+                rec_losses.append(((obs - dec).abs()).sum().item())
+                frames.append(make_grid([obs + 0.5, dec + 0.5], nrow=2).numpy())
                 pred_r.append(self.policy.rssm.pred_reward(
-                    self.policy.prev_state,self.policy.prev_latent
+                    self.policy.h, self.policy.s
                 ).cpu().flatten().item())
             nobs, reward, terminal, _ = self.env.step(act)
             eps.append(obs, act, reward, terminal)

@@ -1,20 +1,7 @@
 # dreamer-pytorch
-A PyTorch Implementation of [Dream to Control: Learning Behaviors by Latent Imagination][paper] by Danijar Hafner et.al.
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
-Dreamer learns a world model that predicts ahead in a compact feature space. From imagined feature sequences, it learns a policy and state-value function. The value gradients are backpropagated through the multi-step predictions to efficiently learn a long-horizon policy.
-
-### Original Project:
-- [Project website][website]
-- [Research paper][paper]
-- [Official implementation][code] (TensorFlow 1)
-
-This project uses some utilities taken from [PlaNet] (refactored for use in this project).
-
-
-[website]: https://danijar.com/dreamer
-[paper]: https://arxiv.org/pdf/1912.01603.pdf
-[code]: https://github.com/google-research/dreamer
-[PlaNet]: https://github.com/Kaixhin/PlaNet
+A PyTorch Implementation of PlaNet: A Deep Planning Network for Reinforcement Learning [[1]](#references) by Danijar Hafner et.al. 
 
 ### Usage
  - Run `main.py` for training.
@@ -43,3 +30,17 @@ Install dependencies ...
 - `tqdm==4.42.1`
 - `torchvision==0.5.0`
 - `gym==0.16.0`
+
+References & Acknowledgements
+-----------------------------
+
+[1] [Learning Latent Dynamics for Planning from Pixels][paper]  
+[2] [google-research/planet] by [@danijar]  
+[3] [PlaNet] by [@Kaixhin]  
+
+[Website]: (https://danijar.com/project/planet/)
+[paper]: (https://arxiv.org/abs/1811.04551)
+[@danijar]: (https://github.com/danijar)
+[@Kaixhin]: (https://github.com/Kaixhin)
+[PlaNet]: (https://github.com/Kaixhin/PlaNet)
+[google-research/planet]: (https://github.com/google-research/planet)

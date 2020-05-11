@@ -45,7 +45,7 @@ class VisualDecoder(nn.Module):
         self.conv4 = nn.ConvTranspose2d(32, 3, 6, stride=2)
 
     def forward(self, state, latent):
-        hidden = self.fc1(torch.cat([latent, state], dim=1))
+        hidden = self.fc1(torch.cat([state, latent], dim=1))
         hidden = hidden.view(-1, self.embedding_size, 1, 1)
         hidden = self.act_fn(self.conv1(hidden))
         hidden = self.act_fn(self.conv2(hidden))
@@ -86,10 +86,17 @@ class RecurrentStateSpaceModel(nn.Module):
         self.fc_reward_3 = nn.Linear(hidden_size, 1)
 
 
-    def get_init_state(self, enc, h_t, s_t, a_t):
+    def get_init_state(self, enc, h_t=None, s_t=None, a_t=None, mean=False):
         """Returns the initial posterior given the observation."""
+        N, dev = enc.size(0), enc.device
+        h_t = torch.zeros(N, self.state_size).to(dev) if h_t is None else h_t
+        s_t = torch.zeros(N, self.latent_size).to(dev) if s_t is None else s_t
+        a_t = torch.zeros(N, self.action_size).to(dev) if a_t is None else a_t
         h_tp1 = self.deterministic_state_fwd(h_t, s_t, a_t)
-        s_tp1 = self.state_posterior(h_t, enc, sample=True)
+        if mean:
+            s_tp1 = self.state_posterior(h_t, enc, sample=True)
+        else:
+            s_tp1, _ = self.state_posterior(h_t, enc)
         return h_tp1, s_tp1
 
     def deterministic_state_fwd(self, h_t, s_t, a_t):
@@ -123,3 +130,13 @@ class RecurrentStateSpaceModel(nn.Module):
         r = self.act_fn(self.fc_reward_1(torch.cat([h_t, s_t], dim=-1)))
         r = self.act_fn(self.fc_reward_2(r))
         return self.fc_reward_3(r).squeeze()
+
+    def rollout_prior(self, act, h_t, s_t):
+        states, latents = [], []
+        for a_t in torch.unbind(act, dim=0):
+            h_t = self.deterministic_state_fwd(h_t, s_t, a_t)
+            s_t = self.state_prior(h_t)
+            states.append(h_t)
+            latents.append(s_t)
+            Normal(*map(torch.stack, zip(*priors)))
+        return torch.stack(states), torch.stack(latents)

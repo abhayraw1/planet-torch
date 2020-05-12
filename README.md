@@ -33,13 +33,12 @@ Install dependencies ...
 
 References & Acknowledgements
 -----------------------------
-
-[1] [Learning Latent Dynamics for Planning from Pixels][paper]  
-[2] [google-research/planet] by [@danijar]  
-[3] [PlaNet] by [@Kaixhin]  
+ - [Learning Latent Dynamics for Planning from Pixels][paper]  
+ - [google-research/planet] by [@danijar]  
+ - [PlaNet] by [@Kaixhin]  
 
 [Website]: https://danijar.com/project/planet/
-[paper]: https://arxiv.org/abs/1811.04551)
+[paper]: https://arxiv.org/abs/1811.04551
 [@danijar]: https://github.com/danijar
 [@Kaixhin]: https://github.com/Kaixhin
 [PlaNet]: https://github.com/Kaixhin/PlaNet

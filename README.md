@@ -38,9 +38,9 @@ References & Acknowledgements
 [2] [google-research/planet] by [@danijar]  
 [3] [PlaNet] by [@Kaixhin]  
 
-[Website]: (https://danijar.com/project/planet/)
-[paper]: (https://arxiv.org/abs/1811.04551)
-[@danijar]: (https://github.com/danijar)
-[@Kaixhin]: (https://github.com/Kaixhin)
-[PlaNet]: (https://github.com/Kaixhin/PlaNet)
-[google-research/planet]: (https://github.com/google-research/planet)
+[Website]: https://danijar.com/project/planet/
+[paper]: https://arxiv.org/abs/1811.04551)
+[@danijar]: https://github.com/danijar
+[@Kaixhin]: https://github.com/Kaixhin
+[PlaNet]: https://github.com/Kaixhin/PlaNet
+[google-research/planet]: https://github.com/google-research/planet

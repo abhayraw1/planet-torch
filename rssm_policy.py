@@ -35,7 +35,7 @@ class RSSMPolicy:
         # observation could be of shape [CHW] but only 1 timestep
         assert len(obs.shape) == 3, 'obs should be [CHW]'
         self.h, self.s = self.rssm.get_init_state(
-            self.rssm.encoder(observation[None]),
+            self.rssm.encoder(obs[None]),
             self.h, self.s, self.a
         )
         for _ in range(self.T):

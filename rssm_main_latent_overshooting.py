@@ -1,10 +1,10 @@
-import gym
+# import gym
 import pdb
 import pickle
 
 from utils import *
 from memory import *
-from models.rssm import *
+from rssm_model import *
 from tqdm import trange
 from collections import defaultdict
 from torch.distributions import Normal

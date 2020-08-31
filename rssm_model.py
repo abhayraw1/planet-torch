@@ -2,6 +2,7 @@ import torch
 
 from torch import nn
 from torch.nn import functional as F
+from torch.distributions import Normal
 
 
 class VisualEncoder(nn.Module):
@@ -138,5 +139,5 @@ class RecurrentStateSpaceModel(nn.Module):
             s_t = self.state_prior(h_t)
             states.append(h_t)
             latents.append(s_t)
-            Normal(*map(torch.stack, zip(*priors)))
+            Normal(*map(torch.stack, zip(*s_t)))
         return torch.stack(states), torch.stack(latents)
